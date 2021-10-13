@@ -13,9 +13,15 @@ class PenguinGame:
 	selectingRow = None
 	selectingColor = None
 	playerNo = 0
-	field = []
+	field = None
+	playerHands = None
+	playerAlive = [True] * PLAYER_NUM
+
 	ground = None
 	canvas = None
+	labelText1 = None
+	labelText2 = None
+	labelText3 = None
 
 	rectWidth = int(640 / CARD_NUM)
 	rectHeight = int(480 / CARD_NUM)
@@ -35,7 +41,7 @@ class PenguinGame:
 		# カードボタンを表示
 		buttonParent = tk.Frame(self.ground)
 		buttonParent.pack(side = tk.BOTTOM)
-		for i in range(1,self.CARDS_CLASS+1,1):
+		for i in range(self.CARDS_CLASS,0,-1):
 			def command():
 				val = i
 				def closer():
@@ -43,7 +49,18 @@ class PenguinGame:
 				return closer
 			button = tk.Button(buttonParent, text=str(i), command=command(), width=10)
 			button.pack(side = tk.RIGHT)
+		# ラベル表示
+		self.labelText1= tk.StringVar()
+		self.labelText1.set("init text")
+		self.labelText2= tk.StringVar()
+		self.labelText2.set("init text")
+		self.labelText3= tk.StringVar()
+		self.labelText3.set("")
+		tk.Label(self.ground, textvariable=self.labelText1).pack(side = tk.TOP)
+		tk.Label(self.ground, textvariable=self.labelText2).pack(side = tk.TOP)
+		tk.Label(self.ground, textvariable=self.labelText3).pack(side = tk.TOP)
 		# フィールド初期化
+		self.field = []
 		for i in range(self.CARD_NUM):
 			line = [-1] * self.CARD_NUM
 			for j in range(i+1):
@@ -55,22 +72,31 @@ class PenguinGame:
 		for i in range(cardSum):
 			cards.append(i % self.CARDS_CLASS)
 		random.shuffle(cards)
-		playerHands = []
+		self.playerHands = []
 		for i in range(self.PLAYER_NUM):
-			playerHands.append([0] * self.CARDS_CLASS)
+			self.playerHands.append([0] * self.CARDS_CLASS)
 		for i in range(cardSum):
-			self.playerNo = i % self.PLAYER_NUM 
+			playerNo = i % self.PLAYER_NUM 
 			card = cards[i]
-			playerHands[self.playerNo][card] += 1
+			self.playerHands[playerNo][card] += 1
 		self.updateDraw()
 		self.ground.mainloop()
-		
+
 	def onClick(self,row = None, col = None, color = None):
+		def isPlayerAlive():
+			for i in range(self.CARD_NUM):
+				for j in range(i+1):
+					if(self.field[i][j] != 0): continue
+					for k in range(self.CARDS_CLASS, 0, -1):
+						if(isLegalCardSelect(k,i,j) == False): continue
+						return True
+			return False
 		# ゲーム用関数
 		def isLegalCardSelect(color, row, col):
 			if(row >= self.CARD_NUM or row < 0): return False
 			if(col >= self.CARD_NUM or col < 0): return False
-			if(color >= self.CARDS_CLASS + 1 or color < 0): return False
+			if(color > self.CARDS_CLASS + 1 or color < 0): return False
+			if(self.playerHands[self.playerNo][color - 1] <= 0): return False
 			# すでにカードがおいてあるか、場外の場合
 			if(self.field[row][col] != 0): return False
 			# 最下行の場合
@@ -88,6 +114,7 @@ class PenguinGame:
 		if(row != None): self.selectingRow = row
 		if(col != None): self.selectingCol = col
 		if(color != None): self.selectingColor = color
+		print(self.selectingCol, self.selectingRow, self.selectingColor)
 		if(self.selectingCol == None or self.selectingRow == None or self.selectingColor == None): return
 		# カードが正しく選ばれたか検証
 		if(isLegalCardSelect(self.selectingColor, self.selectingRow, self.selectingCol) == False):
@@ -96,9 +123,20 @@ class PenguinGame:
 			return
 		# OKな場合は続ける
 		self.field[self.selectingRow][self.selectingCol] = self.selectingColor
+		self.playerHands[self.playerNo][self.selectingColor - 1] -= 1
 		self.selectingRow, self.selectingCol, self.selectingColor = None, None, None
-		self.playerNo = (self.playerNo + 1) % self.PLAYER_NUM
-		self.updateDraw()
+		print(self.selectingRow, self.selectingCol, self.selectingColor)
+		for _ in range(self.PLAYER_NUM):
+			self.playerNo = (self.playerNo + 1) % self.PLAYER_NUM
+			if(self.playerAlive[self.playerNo] == False): continue
+			if(isPlayerAlive() == True):
+				self.updateDraw()
+				return
+			else:
+				self.playerAlive[self.playerNo] = False
+		self.labelText3.set("ゲームオーバー")
+		
+		
 
 	def updateDraw(self):
 		def hsvToRgb(h,s,v):
@@ -118,6 +156,9 @@ class PenguinGame:
 			x = int((v.x - self.rectWidth * (self.CARD_NUM - y - 1) / 2) / self.rectWidth)
 			self.onClick(row = y, col = x)
 
+		# ラベルアップデート
+		self.labelText1.set("player no = " + str(self.playerNo))
+		self.labelText2.set(str(self.playerHands[self.playerNo]))
 		# キャンバスアップデート
 		self.canvas.delete("all")
 		for i in range(self.CARD_NUM):
@@ -126,8 +167,9 @@ class PenguinGame:
 			for j in range(i + 1):
 				id = "rect" + str(i * self.CARD_NUM + j)
 				self.canvas.create_rectangle(x0, y0, x0 + self.rectWidth, y0 + self.rectHeight, fill = fieldToRGB(self.field[i][j]), outline = "#000", tags=id)
-				self.canvas.tag_bind(id, "<Button-1>", clickRect,3)
+				self.canvas.tag_bind(id, "<ButtonRelease-1>", clickRect,3)
 				x0 += self.rectWidth
 
 
 main = PenguinGame()
+# %%
