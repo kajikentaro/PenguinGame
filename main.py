@@ -2,8 +2,12 @@
 import colorsys
 import tkinter as tk
 import random
+import gym
+from gym import spaces
+import math
 from tkinter.constants import BOTTOM, CENTER
-class PenguinGame:
+claee P
+class PenguinGame(gym.Env):
 	CARD_NUM = 7
 	PLAYER_NUM = 4
 	CARDS_CLASS = 5
@@ -27,7 +31,32 @@ class PenguinGame:
 	rectHeight = int(480 / CARD_NUM)
 
 	def __init__(self):
-		self.initDraw()
+		super(PenguinGame, self).__init__()
+		cardSum = int((1 + self.CARD_NUM) * self.CARD_NUM / 2)
+		self.action_space = spaces.MultiDiscrete([cardSum, self.CARDS_CLASS])
+		self.observation_space = spaces.MultiDiscrete([self.CARDS_CLASS] * (cardSum + int(cardSum / self.PLAYER_NUM + 1)))
+	def reset(self):
+		# フィールド初期化
+		self.field = []
+		for i in range(self.CARD_NUM):
+			line = [-1] * self.CARD_NUM
+			for j in range(i+1):
+				line[j] = 0
+			self.field.append(line)
+		# カードを配る
+		cardSum = int((1 + self.CARD_NUM) * self.CARD_NUM / 2)
+		cards = []
+		for i in range(cardSum):
+			cards.append(i % self.CARDS_CLASS)
+		random.shuffle(cards)
+		self.playerHands = []
+		for i in range(self.PLAYER_NUM):
+			self.playerHands.append([0] * self.CARDS_CLASS)
+		for i in range(cardSum):
+			playerNo = i % self.PLAYER_NUM 
+			card = cards[i]
+			self.playerHands[playerNo][card] += 1
+
 	def initDraw(self):
 		# ウィンドウ描写
 		self.ground  = tk.Tk()
@@ -59,28 +88,71 @@ class PenguinGame:
 		tk.Label(self.ground, textvariable=self.labelText1).pack(side = tk.TOP)
 		tk.Label(self.ground, textvariable=self.labelText2).pack(side = tk.TOP)
 		tk.Label(self.ground, textvariable=self.labelText3).pack(side = tk.TOP)
-		# フィールド初期化
-		self.field = []
-		for i in range(self.CARD_NUM):
-			line = [-1] * self.CARD_NUM
-			for j in range(i+1):
-				line[j] = 0
-			self.field.append(line)
-		# カードを配る
-		cardSum = int((1 + self.CARD_NUM) * self.CARD_NUM / 2)
-		cards = []
-		for i in range(cardSum):
-			cards.append(i % self.CARDS_CLASS)
-		random.shuffle(cards)
-		self.playerHands = []
-		for i in range(self.PLAYER_NUM):
-			self.playerHands.append([0] * self.CARDS_CLASS)
-		for i in range(cardSum):
-			playerNo = i % self.PLAYER_NUM 
-			card = cards[i]
-			self.playerHands[playerNo][card] += 1
+		self.reset()
 		self.updateDraw()
 		self.ground.mainloop()
+	def step(self, action):
+		cardPos = action[0]
+		self.selectingRow = int((1 + math.sqrt(8*cardPos)) / 2)
+		self.selectingCol = cardPos - int(self.selectingRow* (self.selectingRow - 1) / 2)
+		self.selectingColor = action[1] + 1
+		def isPlayerAlive():
+			for i in range(self.CARD_NUM):
+				for j in range(i+1):
+					if(self.field[i][j] != 0): continue
+					for k in range(self.CARDS_CLASS, 0, -1):
+						if(isLegalCardSelect(k,i,j) == False): continue
+						return True
+			return False
+		# ゲーム用関数
+		def isLegalCardSelect(color, row, col):
+			if(row >= self.CARD_NUM or row < 0): return False
+			if(col >= self.CARD_NUM or col < 0): return False
+			if(color > self.CARDS_CLASS + 1 or color < 0): return False
+			if(self.playerHands[self.playerNo][color - 1] <= 0): return False
+			# すでにカードがおいてあるか、場外の場合
+			if(self.field[row][col] != 0): return False
+			# 最下行の場合
+			if(row == self.CARD_NUM - 1):
+				# 端の場合
+				if(col == 0 or col == self.CARD_NUM - 1): return True
+				# 端じゃない場合、側にカードが無いと置けない
+				if(self.field[row][col-1] != 0 or self.field[row][col+1] != 0): return True
+				return False
+			# 中段の場合、下二枚が埋まっていないとダメ
+			if(self.field[row+1][col] == 0 or self.field[row+1][col+1] == 0): return False
+			# 中段の場合、そのどちらかの下が同じ色の必要がある
+			if(self.field[row+1][col] == color or self.field[row+1][col+1] == color): return True
+			else: return False
+		def getResponse():
+			observation, reward, done, info = [], None, False, {}
+			for i in range(self.CARD_NUM):
+				for j in range(i+1):
+					observation.append(self.field[i][j])
+			# カードが正しく選ばれたか検証
+			if(isLegalCardSelect(self.selectingColor, self.selectingRow, self.selectingCol) == False):
+				# wrong selection
+				reward = -0.1
+				return observation + self.playerHands[self.playerNo], reward, done, info
+			# OKな場合は続ける
+			self.field[self.selectingRow][self.selectingCol] = self.selectingColor
+			self.playerHands[self.playerNo][self.selectingColor - 1] -= 1
+			if isPlayerAlive():
+				reward = 0.1
+			else: 
+				reward = 0
+			for _ in range(self.PLAYER_NUM):
+				self.playerNo = (self.playerNo + 1) % self.PLAYER_NUM
+				if(self.playerAlive[self.playerNo] == False): continue
+				if(isPlayerAlive() == True):
+					self.updateDraw()
+					return
+				else:
+					self.playerAlive[self.playerNo] = False
+			self.labelText3.set("ゲームオーバー")
+			return observation + self.playerHands[self.playerNo], reward, done, info
+		return getResponse()
+
 
 	def onClick(self,row = None, col = None, color = None):
 		def isPlayerAlive():
