@@ -283,9 +283,9 @@ for i in range(15):
 """
 env = PenguinGame()
 model = PPO('MlpPolicy', env, verbose=1)
-model.load("saved-model")
+model.load("saved-model3")
 #model.learn(total_timesteps=50000)
-#model.save("saved-model")
+#model.save("saved-model3")
 
 import time
 obs = env.reset()
@@ -297,4 +297,3 @@ while True:
 		time.sleep(10)
 		break
 	env.render()
-	time.sleep(0.001)
