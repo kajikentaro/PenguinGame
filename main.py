@@ -20,7 +20,7 @@ class Field:
 	field1d = None
 	playerHands = None
 
-	def __init__(self, CARD_NUM = 7, PLAYER_NUM = 2, CARDS_CLASS = 5):
+	def __init__(self, CARD_NUM = 6, PLAYER_NUM = 2, CARDS_CLASS = 5):
 		self.CARD_NUM = CARD_NUM
 		self.CARD_SUM = int((1 + CARD_NUM) * CARD_NUM / 2)
 		self.PLAYER_NUM = PLAYER_NUM
@@ -62,15 +62,6 @@ class Field:
 	def getObservation(self, playerNo):
 		return np.array(self.field1d + self.playerHands[playerNo])
 
-	def isPlayerAlive(self, playerNo):
-		BLANK = -1
-		for i in range(self.CARD_NUM):
-			for j in range(i+1):
-				if(self.field2d[i][j] != BLANK): continue
-				for k in range(self.CARDS_CLASS):
-					if(self.isLegalCardSelect(i,j,k,playerNo) == False): continue
-					return True
-		return False
 	# ゲーム用関数
 	def isLegalCardSelect(self,row, col, color, playerNo):
 		OUTBOARD = -2
@@ -103,11 +94,21 @@ class Field:
 
 	# ランダムにカードを配置する。成功したらTrue、失敗(負けた場合)はFalse
 	def randomSelect(self, playerNo):
+		BLANK = -1
 		for i in range(self.CARD_NUM):
 			for j in range(i+1):
-				if(self.field2d[i][j] != 0): continue
+				if(self.field2d[i][j] != BLANK): continue
 				for k in range(self.CARDS_CLASS):
-					if(self.placeCard(k,i,j,playerNo) == False): continue
+					if(self.placeCard(i,j,k,playerNo) == False): continue
+					return True
+		return False
+	def isPlayerAlive(self, playerNo):
+		BLANK = -1
+		for i in range(self.CARD_NUM):
+			for j in range(i+1):
+				if(self.field2d[i][j] != BLANK): continue
+				for k in range(self.CARDS_CLASS):
+					if(self.isLegalCardSelect(i,j,k,playerNo) == False): continue
 					return True
 		return False
 
@@ -124,7 +125,7 @@ class PenguinGame(gym.Env):
 		CARD_NUM, CARD_SUM, PLAYER_NUM, CARDS_CLASS = field.getCardSet()
 		self.action_space = spaces.MultiDiscrete([CARD_SUM, CARDS_CLASS])
 		self.observation_space = spaces.MultiDiscrete([CARDS_CLASS + 1] * CARD_SUM + [int(CARD_SUM / PLAYER_NUM + 1)] * CARDS_CLASS)
-		if os.path.exists("saved-model"):
+		if os.path.exists("saved-model.zip"):
 			self.model = PPO.load("saved-model")
 	def reset(self):
 		self.field = Field()
@@ -141,7 +142,6 @@ class PenguinGame(gym.Env):
 			if self.field.placeCard(row, col, color, 1) == True:
 				return True
 		self.field.randomSelect(1)
-		print("random choice NPC occer")
 			
 
 		
@@ -152,7 +152,8 @@ class PenguinGame(gym.Env):
 		if self.field.placeCard(row, col, color, 0) == False:
 			# 選択に失敗した場合
 			observation = self.field.getObservation(0)
-			reward = -0.01
+			reward = -0.2
+			done = False
 			return observation, reward, done, info
 
 		if self.field.isPlayerAlive(1) == False:
@@ -185,7 +186,6 @@ class PenguinGame(gym.Env):
 		if self.renderMod == None:
 			self.renderMod = Render(self.field)
 		self.renderMod.updateDraw()
-		print(self.field.field1d)
 
 class Render:
 	CARD_NUM, CARD_SUM, PLAYER_NUM, CARDS_CLASS = None, None, None, None
@@ -271,6 +271,7 @@ class Render:
 		self.ground.update()
 
 # %%
+"""
 for i in range(15):
 	env = PenguinGame()
 	model = PPO('MlpPolicy', env, verbose=1)
@@ -279,13 +280,21 @@ for i in range(15):
 	model.learn(total_timesteps=25000)
 	model.save("saved-model")
 	print(i)
+"""
+env = PenguinGame()
+model = PPO('MlpPolicy', env, verbose=1)
+model.load("saved-model")
+#model.learn(total_timesteps=50000)
+#model.save("saved-model")
 
 import time
 obs = env.reset()
-for _ in range(1000):
-		action, _states = model.predict(obs)
-		obs, rewards, dones, info = env.step(action)
-		if dones:
-			break
-		env.render()
-		time.sleep(0.1)
+while True:
+	action, _states = model.predict(obs)
+	obs, rewards, dones, info = env.step(action)
+	if dones:
+		print("done")
+		time.sleep(10)
+		break
+	env.render()
+	time.sleep(0.001)
